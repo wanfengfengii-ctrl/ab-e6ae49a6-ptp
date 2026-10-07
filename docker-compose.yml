@@ -1,0 +1,32 @@
+services:
+  api:
+    build: .
+    image: ptp-audit-api:latest
+    # Host-side port is configured via the PTP_API_HOST_PORT environment
+    # variable (defaults to 8080); the container always listens on 8000.
+    ports:
+      - "${PTP_API_HOST_PORT:-8080}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)"
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 5s
+    restart: unless-stopped
+
+  # One-shot verification: build check + test suite + live API smoke test.
+  # Starts only after the api health check passes and reports via exit code.
+  verify:
+    build: .
+    image: ptp-audit-api:latest
+    command: ["sh", "scripts/verify.sh"]
+    environment:
+      API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: "no"
